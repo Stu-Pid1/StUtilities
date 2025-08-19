@@ -1,0 +1,95 @@
+record(ai, "BW2:STA:2")
+{
+	 field(DESC,"Status of a beam stopper")
+
+}
+record(ai, "T-MXC1:IST:2")
+{
+	 field(DESC,"MXC1 current")
+
+}
+record(ai, "T-MXC2:IST:2")
+{
+	 field(DESC,"MXC2 current")
+
+}
+record(ai, "T-MNC3:IST:2")
+{
+	 field(DESC,"MNC3 current")
+
+}
+record(ai, "MHC2B:IST:2")
+{
+	 field(DESC,"Bergoz CT, as reference")
+
+}
+record(ai, "T-MHC1:IST:2")
+{
+	 field(DESC,"MHC1 current")
+
+}
+record(ai, "T-MHC2:IST:2")
+{
+	 field(DESC,"MHC2 current")
+
+}
+record(ai, "T-MHC3:IST:2")
+{
+	 field(DESC,"MHC3 current")
+
+}
+record(ai, "T-MHC4:IST:2")
+{
+	 field(DESC,"MHC4 current")
+
+}
+record(ai, "T-MHC5:IST:2")
+{
+	 field(DESC,"MHC5 current")
+
+}
+record(ai, "MHC6B:IST:2")
+{
+	 field(DESC,"Bergoz CT, as reference")
+
+}
+record(ai, "T-MXC1:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MXC2:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MNC3:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MHC1:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MHC2:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MHC3:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MHC4:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
+record(ai, "T-MHC5:EICH:1")
+{
+	 field(DESC,"Old Calibration factor")
+
+}
