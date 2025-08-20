@@ -17,6 +17,7 @@ from matplotlib.figure import Figure
 
 
 
+
 class MathOpsDialog(QDialog):
     def __init__(self, parent, datasets):
         super().__init__(parent)
@@ -51,13 +52,26 @@ class MathOpsDialog(QDialog):
             QMessageBox.warning(self, "Error", "Please enter an expression")
             return
 
-        # Build evaluation environment
+        # --- Build common x-grid ---
+        # Use union of all x values in referenced datasets
+        referenced = [i for i in range(1, len(self.datasets)+1) if f"T{i}" in expr]
+        if not referenced:
+            QMessageBox.warning(self, "Error", "No valid dataset references found")
+            return
+
+        all_x = np.unique(np.concatenate([self.datasets[i-1]["x"] for i in referenced]))
+        common_x = np.linspace(all_x.min(), all_x.max(), max(len(all_x), 500))
+
+        # --- Build evaluation environment ---
         env = {}
-        for i, data in enumerate(self.datasets, 1):
-            env[f"T{i}"] = {"x": data["x"], "y": data["y"]}
+        for i in range(1, len(self.datasets)+1):
+            data = self.datasets[i-1]
+            # Interpolate y to common_x
+            y_interp = np.interp(common_x, data["x"], data["y"])
+            env[f"T{i}"] = {"x": common_x, "y": y_interp}
 
         try:
-            # Convert ROOT-style Tn.y to Python Tn['y']
+            # Convert ROOT-style syntax: T1.y → T1['y']
             safe_expr = expr.replace(".x", "['x']").replace(".y", "['y']")
             result = eval(safe_expr, {"np": np}, env)
 
@@ -65,16 +79,137 @@ class MathOpsDialog(QDialog):
                 QMessageBox.warning(self, "Error", "Expression did not return an array")
                 return
 
+            # --- Check for invalid values ---
+            if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+                QMessageBox.critical(self, "Invalid Result",
+                                     "Expression resulted in NaN or Inf values.")
+                return
+
             # Return result to parent
             self.parent().add_dataset(
-                self.datasets[0]["x"],  # assume same x for now
+                common_x,
                 result,
-                label=f"Math: {expr}"
+                label=f"{expr}"
             )
             self.accept()
 
         except Exception as e:
             QMessageBox.critical(self, "Evaluation Error", str(e))
+
+
+class DataPlotWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # --- Layout ---
+        main_layout = QHBoxLayout(self)
+        plot_layout = QVBoxLayout()
+        main_layout.addLayout(plot_layout, stretch=3)
+
+        # matplotlib figure + toolbar
+        self.figure = Figure(figsize=(6, 4))
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        plot_layout.addWidget(self.toolbar)
+        plot_layout.addWidget(self.canvas)
+
+        # Control panel
+        control_layout = QHBoxLayout()
+        plot_layout.addLayout(control_layout)
+
+        self.add_btn = QPushButton("Add Data")
+        self.add_btn.clicked.connect(self.add_data)
+        control_layout.addWidget(self.add_btn)
+
+        self.math_btn = QPushButton("Math Ops")
+        self.math_btn.clicked.connect(self.open_math_ops)
+        control_layout.addWidget(self.math_btn)
+
+        self.color_btn = QPushButton("Set Color")
+        self.color_btn.clicked.connect(self.set_color)
+        control_layout.addWidget(self.color_btn)
+
+        self.grid_checkbox = QCheckBox("Show Grid")
+        self.grid_checkbox.stateChanged.connect(self.toggle_grid)
+        control_layout.addWidget(self.grid_checkbox)
+
+        control_layout.addWidget(QLabel("Line Style:"))
+        self.style_combo = QComboBox()
+        self.style_combo.addItems(["-", "--", ":", "-."])
+        self.style_combo.currentTextChanged.connect(self.change_style)
+        control_layout.addWidget(self.style_combo)
+
+        # Table of datasets
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Name", "Points", "Style", "Color", "Visible"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        main_layout.addWidget(self.table, stretch=1)
+
+        # Store datasets
+        self.datasets = []
+        self.current_color = "blue"
+        self.current_style = "-"
+
+        # Initial test plot
+        self.add_data()
+        self.add_data()  # add 2 datasets for testing math ops
+
+    def add_dataset(self, x, y, label=None):
+        """General-purpose method to add dataset and update table"""
+        if label is None:
+            label = f"Data {len(self.datasets)+1}"
+
+        line, = self.ax.plot(x, y,
+                             color=self.current_color,
+                             linestyle=self.current_style,
+                             label=label)
+        self.datasets.append({
+            "name": label,
+            "x": np.array(x),
+            "y": np.array(y),
+            "line": line
+        })
+
+        # Update table
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        self.table.setItem(row, 0, QTableWidgetItem(label))
+        self.table.setItem(row, 1, QTableWidgetItem(str(len(x))))
+        self.table.setItem(row, 2, QTableWidgetItem(self.current_style))
+        self.table.setItem(row, 3, QTableWidgetItem(self.current_color))
+        visible_item = QTableWidgetItem("Yes")
+        visible_item.setCheckState(2)  # Checked
+        self.table.setItem(row, 4, visible_item)
+
+        self.ax.legend()
+        self.canvas.draw()
+
+    def add_data(self):
+        """Add synthetic test data"""
+        x = np.linspace(0, 10, 200)
+        y = np.sin(x) + np.random.randn(len(x)) * 0.1
+        self.add_dataset(x, y)
+
+    def open_math_ops(self):
+        dialog = MathOpsDialog(self, self.datasets)
+        dialog.exec()
+
+    def set_color(self):
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.current_color = color.name()
+
+    def toggle_grid(self, state):
+        self.ax.grid(state == 2)
+        self.canvas.draw()
+
+    def change_style(self, style):
+        self.current_style = style
+
+
 
 
 
@@ -161,21 +296,40 @@ class DataPlotWidget(QWidget):
         self.add_data()
 
     # --- Plotting functions ---
-    def add_data(self):
-        """Add a new dataset to the plot"""
-        x = np.linspace(0.1, 10, 200)  # safe for log axes
-        y = np.sin(x) + np.random.randn(len(x)) * 0.1
-        name = f"Data {len(self.lines) + 1}"
+    def add_dataset(self, x, y, label=None):
+        """General-purpose method to add dataset and update table"""
+        if label is None:
+            label = f"Data {len(self.datasets)+1}"
 
         line, = self.ax.plot(x, y,
-                             color=self.current_color,
-                             linestyle=self.current_style,
-                             label=name)
-        self.lines.append(line)
-        self.data_store[line] = (x, y)
+                            color=self.current_color,
+                            linestyle=self.current_style,
+                            label=label)
+        self.datasets.append({
+            "name": label,
+            "x": np.array(x),
+            "y": np.array(y),
+            "line": line
+        })
+        # Update table
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        self.table.setItem(row, 0, QTableWidgetItem(label))
+        self.table.setItem(row, 1, QTableWidgetItem(str(len(x))))
+        self.table.setItem(row, 2, QTableWidgetItem(self.current_style))
+        self.table.setItem(row, 3, QTableWidgetItem(self.current_color))
+        visible_item = QTableWidgetItem("Yes")
+        visible_item.setCheckState(2)  # Checked
+        self.table.setItem(row, 4, visible_item)
+
         self.ax.legend()
         self.canvas.draw()
-        self.add_to_table(line, name, x, y)
+
+    def add_data(self):
+        """Add synthetic test data"""
+        x = np.linspace(0, 10, 200)
+        y = np.sin(x) + np.random.randn(len(x)) * 0.1
+        self.add_dataset(x, y)
 
     def add_to_table(self, line, name, x, y):
         row = self.table.rowCount()
@@ -276,7 +430,9 @@ class DataPlotWidget(QWidget):
             self.table.hide()
             self.toggle_table_btn.setText("Show Table")
         self.table_hidden = not self.table_hidden
-
+    def open_math_ops(self):
+        dialog = MathOpsDialog(self, self.datasets)
+        dialog.exec()
 
 # --- Run app ---
 if __name__ == "__main__":
